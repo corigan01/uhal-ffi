@@ -1,0 +1,3 @@
+-Iipbus-software/uhal/uhal/include
+-Iipbus-software/uhal/log/include
+-Iipbus-software/uhal/grammars/include
