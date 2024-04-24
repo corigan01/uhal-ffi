@@ -1,0 +1,265 @@
+
+.template_build_rpm_yumrepo:
+  stage: build
+  before_script:
+    # Fix for CERN k8s-provisioned shared runners: Limit number of opened file descriptors with ulimit
+    - ulimit -n 1048576
+    - pwd
+    - ls -al
+    - export PYTHON=$(echo $PYTHONS | head -n1 | awk '{print $1;}')
+    - echo PYTHON=${PYTHON}
+    - export REPO_DIR=${CI_PROJECT_DIR}/ci_results/repos/${OUTPUT_REPO_SUBDIR}
+    - if [ -z "${CI_COMMIT_TAG}" ]; then export PACKAGE_RELEASE_SUFFIX=.autobuild_$(git log --pretty=format:'%h' -1) ; fi
+  script:
+    - make -k Set=all check-version
+    - make -k Set=all BUILD_UHAL_PYTHON=0 BUILD_UHAL_GUI=0
+    - make -k Set=all BUILD_UHAL_PYTHON=0 BUILD_UHAL_GUI=0 PACKAGE_RELEASE_SUFFIX=${PACKAGE_RELEASE_SUFFIX} rpm
+    - mkdir -p ${REPO_DIR}
+    - cp -v `find . -iname "*.rpm"` ${REPO_DIR}
+    - cp -v ${YUMGROUPS_FILE} ${REPO_DIR}/yumgroups.xml
+    - |
+      for PYTHON in ${PYTHONS}; do
+        echo "PYTHON: ${PYTHON}"
+        make -C uhal/gui PYTHON=$PYTHON
+        make -C uhal/gui PYTHON=$PYTHON rpm
+        make -C uhal/python PYTHON=$PYTHON
+        make -C uhal/python PYTHON=$PYTHON rpm
+        cp -v `find uhal/gui uhal/python -iname "*.rpm"` ${REPO_DIR}
+        make -C uhal/gui PYTHON=$PYTHON clean cleanrpm
+        make -C uhal/python PYTHON=$PYTHON clean cleanrpm
+        echo &&
+        echo
+      done
+    - ls ${REPO_DIR}
+    - createrepo -vg yumgroups.xml ${REPO_DIR}
+  artifacts:
+    paths:
+      - ci_results/repos/${OUTPUT_REPO_SUBDIR}
+    when: always
+    expire_in: 1 day
+
+.template_build_rpm_yumrepo:x86:
+  extends: .template_build_rpm_yumrepo
+  variables:
+    GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}_____
+  tags:
+    - k8s-default
+
+.template_build_rpm_yumrepo:arm64:
+  extends: .template_build_rpm_yumrepo
+  # Increase path length within uhal directory for debuginfo builds, until docker-aarch64 supports GIT_CLONE_PATH
+  before_script:
+    - mkdir  /tmp/____________
+    - cp -r ${CI_BUILDS_DIR}/${CI_PROJECT_PATH} /tmp/____________/ipbus-software
+    - cd /tmp/____________/ipbus-software
+    - !reference [.template_build_rpm_yumrepo, before_script]
+  tags:
+    - docker-aarch64
+
+
+.template_build_rpm_yumrepo:docker_buildx:
+  stage: build
+  image: jonoh/docker-buildx-qemu:19.03.8_0.3.1
+  tags:
+    - docker:dind
+    - multiarch:qemu
+  services:
+    - name: docker:19.03.11-dind
+      # Enable experimental features in Docker server (for 'docker run --platform ...')
+      command: ["--experimental", "--debug"]
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "/certs/client"
+  before_script:
+    - docker info
+    - docker context create builder-context
+    - docker buildx create --driver docker-container --use builder-context
+    - docker buildx inspect --bootstrap
+    - update-binfmts --enable
+
+    - export REPO_DIR=${CI_PROJECT_DIR}/ci_results/repos/${OUTPUT_REPO_SUBDIR}
+    - if [ -z "${CI_COMMIT_TAG}" ]; then export PACKAGE_RELEASE_SUFFIX=.autobuild_$(git log --pretty=format:'%h' -1) ; fi
+  script:
+    - docker buildx build --platform ${BUILD_PLATFORM} --target export --build-arg PACKAGE_RELEASE_SUFFIX=${PACKAGE_RELEASE_SUFFIX} -f ${DOCKERFILE} -t build-products-exporter --output type=local,dest=$(pwd)/build-products .
+    - ls -al build-products/rpms
+    - mkdir -vp $(dirname ${REPO_DIR})
+    - mv build-products/rpms ${REPO_DIR}
+  artifacts: !reference [.template_build_rpm_yumrepo, artifacts]
+
+
+build:centos7:x86:
+  extends: .template_build_rpm_yumrepo:x86
+  image: ${IPBUS_DOCKER_REGISTRY}/centos7/ipbus-sw-dev:2023.08.30__boost1.53.0_pugixml1.8
+  variables:
+    OUTPUT_REPO_SUBDIR: centos7/x86_64
+    PYTHONS: "python2.7 python3.4 python3.6"
+    YUMGROUPS_FILE: ci/yum/yumgroups-centos7.xml
+
+build:centos7:arm64:
+  extends: .template_build_rpm_yumrepo:arm64
+  image: ${IPBUS_DOCKER_REGISTRY}/centos7/ipbus-sw-dev:2023.08.30__boost1.53.0_pugixml1.8
+  variables:
+    OUTPUT_REPO_SUBDIR: centos7/aarch64
+    PYTHONS: "python2.7 python3.4 python3.6"
+    YUMGROUPS_FILE: ci/yum/yumgroups-centos7.xml
+
+build:centos7:armv7:
+  extends: .template_build_rpm_yumrepo:docker_buildx
+  variables:
+    BUILD_PLATFORM: linux/arm/v7
+    DOCKERFILE: ci/ipbus-sw-builder-centos7.Dockerfile
+    OUTPUT_REPO_SUBDIR: centos7/armhfp
+
+
+build:alma8:x86:
+  extends: .template_build_rpm_yumrepo:x86
+  image: ${IPBUS_DOCKER_REGISTRY}/alma8/ipbus-sw-dev:2024.03.06__boost1.66.0_pugixml1.13
+  variables:
+    OUTPUT_REPO_SUBDIR: alma8/x86_64
+    PYTHONS: "python3.6 python3.8 python3.9 python3.11"
+    YUMGROUPS_FILE: ci/yum/yumgroups-el8.xml
+
+build:alma8:arm64:
+  extends: .template_build_rpm_yumrepo:arm64
+  image: ${IPBUS_DOCKER_REGISTRY}/alma8/ipbus-sw-dev:2024.03.06__boost1.66.0_pugixml1.13
+  variables:
+    OUTPUT_REPO_SUBDIR: alma8/aarch64
+    PYTHONS: "python3.6 python3.8 python3.9 python3.11"
+    YUMGROUPS_FILE: ci/yum/yumgroups-el8.xml
+
+
+build:alma9:x86:
+  extends: .template_build_rpm_yumrepo:x86
+  image: ${IPBUS_DOCKER_REGISTRY}/alma9/ipbus-sw-dev:2023.08.30__boost1.75.0_pugixml1.13
+  variables:
+    OUTPUT_REPO_SUBDIR: alma9/x86_64
+    PYTHONS: "python3.9 python3.11"
+    YUMGROUPS_FILE: ci/yum/yumgroups-el9.xml
+
+build:alma9:arm64:
+  extends: .template_build_rpm_yumrepo:arm64
+  image: ${IPBUS_DOCKER_REGISTRY}/alma9/ipbus-sw-dev:2023.08.30__boost1.75.0_pugixml1.13
+  variables:
+    OUTPUT_REPO_SUBDIR: alma9/aarch64
+    PYTHONS: "python3.9 python3.11"
+    YUMGROUPS_FILE: ci/yum/yumgroups-el9.xml
+
+
+build:centos7-gcc8:
+  stage: build
+  image: ${IPBUS_DOCKER_REGISTRY}/ipbus-sw-dev-centos7-gcc8:2023-08-30
+  variables:
+    FF_KUBERNETES_HONOR_ENTRYPOINT: 1
+    GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}_____
+    OUTPUT_REPO_SUBDIR: centos7_gcc8/x86_64
+    PYTHONS: "python2.7 python3.4 python3.6"
+    YUMGROUPS_FILE: ci/yum/yumgroups-centos7-gcc8.xml
+  before_script:
+    - export PYTHON=$(echo $PYTHONS | head -n1 | awk '{print $1;}')
+    - export REPO_DIR=${CI_PROJECT_DIR}/ci_results/repos/${OUTPUT_REPO_SUBDIR}
+    - if [ -z "${CI_COMMIT_TAG}" ]; then export PACKAGE_RELEASE_SUFFIX=.autobuild_$(git log --pretty=format:'%h' -1) ; fi
+    - curl -L http://github.com/zeux/pugixml/releases/download/v1.9/pugixml-1.9.zip -o extern/pugixml/pugixml-1.9.zip
+    - curl -L https://boostorg.jfrog.io/artifactory/main/release/1.66.0/source/boost_1_66_0.tar.bz2 -o extern/boost/boost_1_66_0.tar.bz2
+    - sed -i "s/PACKAGE_VER_MINOR = 2/PACKAGE_VER_MINOR = 9/g" extern/pugixml/Makefile
+    - sed -i "s/PACKAGE_VER_MINOR = 53/PACKAGE_VER_MINOR = 66/g" extern/boost/Makefile
+    - sed -i 's|cd ${ZIP_NAME}|cd ${ZIP_NAME}/${ZIP_NAME}|g' extern/pugixml/Makefile
+    - git diff
+    - sudo yum -y install zlib-devel
+  script:
+    - make -k Set=all BUILD_BOOST=1 BUILD_PUGIXML=1 BUILD_UHAL_PYTHON=0 check-version
+    - make -k Set=all BUILD_BOOST=1 BUILD_PUGIXML=1 BUILD_UHAL_PYTHON=0
+    - make -k Set=all BUILD_BOOST=1 BUILD_PUGIXML=1 BUILD_UHAL_PYTHON=0 PACKAGE_RELEASE_SUFFIX=${PACKAGE_RELEASE_SUFFIX} rpm
+    - mkdir -p ${REPO_DIR}
+    - cp `find . -iname "*.rpm"` ${REPO_DIR}
+    - cp ${YUMGROUPS_FILE} ${REPO_DIR}/yumgroups.xml
+    - |
+      for PYTHON in ${PYTHONS}; do
+        echo "PYTHON: ${PYTHON}"
+        make -C uhal/gui PYTHON=$PYTHON BUILD_BOOST=1 BUILD_PUGIXML=1
+        make -C uhal/gui PYTHON=$PYTHON rpm
+        make -C uhal/python PYTHON=$PYTHON BUILD_BOOST=1 BUILD_PUGIXML=1
+        make -C uhal/python PYTHON=$PYTHON rpm
+        cp -v `find uhal/gui uhal/python -iname "*.rpm"` ${REPO_DIR}
+        make -C uhal/gui PYTHON=$PYTHON clean cleanrpm
+        make -C uhal/python PYTHON=$PYTHON clean cleanrpm
+        echo &&
+        echo
+      done
+    - ls ${REPO_DIR}
+    - createrepo -vg yumgroups.xml ${REPO_DIR}
+  artifacts:
+    paths:
+      - ci_results/repos/${OUTPUT_REPO_SUBDIR}
+    when: always
+    expire_in: 1 day
+  tags:
+    - k8s-default
+
+
+publish:yum:centos7:x86:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/centos7/x86_64
+    DEPLOY_SUBDIR: repos/centos7/x86_64
+  needs:
+    - build:centos7:x86
+
+publish:yum:centos7:arm64:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/centos7/aarch64
+    DEPLOY_SUBDIR: repos/centos7/aarch64
+  needs:
+    - build:centos7:arm64
+
+publish:yum:centos7:armv7:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/centos7/armhfp
+    DEPLOY_SUBDIR: repos/centos7/armhfp
+  needs:
+    - build:centos7:armv7
+
+publish:yum:centos7-gcc8:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/centos7_gcc8/x86_64
+    DEPLOY_SUBDIR: repos/centos7_gcc8/x86_64
+  needs:
+    - build:centos7-gcc8
+
+publish:yum:alma8:x86:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/alma8/x86_64
+    # For backward compatibility: Keep YUM repo subdirectory as "centos8" (rather than "el8") until v2.9
+    DEPLOY_SUBDIR: repos/centos8/x86_64
+  needs:
+    - build:alma8:x86
+
+publish:yum:alma8:arm64:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/alma8/aarch64
+    # For backward compatibility: Keep YUM repo subdirectory as "centos8" (rather than "el8") until v2.9
+    DEPLOY_SUBDIR: repos/centos8/aarch64
+  needs:
+    - build:alma8:arm64
+
+publish:yum:alma9:x86:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/alma9/x86_64
+    DEPLOY_SUBDIR: repos/el9/x86_64
+  needs:
+    - build:alma9:x86
+
+publish:yum:alma9:arm64:
+  extends: .template_publish
+  variables:
+    CI_OUTPUT_DIR: ci_results/repos/alma9/aarch64
+    DEPLOY_SUBDIR: repos/el9/aarch64
+  needs:
+    - build:alma9:arm64

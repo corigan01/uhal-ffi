@@ -1,0 +1,22 @@
+
+include:
+  - local: ci/doxygen.yml
+  - local: ci/build-rpm.yml
+  - local: ci/build-simple.yml
+  - local: ci/github-status.yml
+  - local: ci/template-publish.yml
+  - local: ci/tests.yml
+
+stages:
+  - initial_report
+  - build
+  - publish
+  - test
+  - final_report
+
+variables:
+  GIT_SUBMODULE_STRATEGY: normal
+  GITHUB_REPO_API_URL: "https://api.github.com/repos/ipbus/ipbus-software"
+  IPBUS_DOCKER_REGISTRY: "gitlab-registry.cern.ch/ipbus/ipbus-docker"
+  OUTPUT_ROOT_DIR: "/eos/user/i/ipbusci/sw-gitlab-ci"
+  OUTPUT_ROOT_URL: "http://www.cern.ch/ipbus/sw/ci"

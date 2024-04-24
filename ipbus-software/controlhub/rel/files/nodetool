@@ -1,0 +1,314 @@
+#!/usr/bin/env escript
+%% -*- mode: erlang;erlang-indent-level: 4;indent-tabs-mode: nil -*- %% ex: ft=erlang ts=4 sw=4 et
+%%! -setcookie ch_nodetool_cookie -hidden
+%% -------------------------------------------------------------------
+%%
+%% nodetool: Helper Script for interacting with live nodes
+%%
+%% -------------------------------------------------------------------
+
+-record(options, {node_start_arg=undefined, target_name=undefined, target_cookie=undefined}).
+
+main(Args) ->
+    ok = start_epmd(),
+
+    %% Extract the args, and start local nodetool node
+    {RestArgs, NodeOpts} = process_args(Args, [], #options{}),
+
+    %% BE WARNED: The if a cookie has not already been set (e.g. via -setcookie arg on third line of script), then ...
+    %%    ... the net_kernel:start function will assume that ${HOME}/.erlang.cookie is readable if it exists, or that this file can be written
+    {ok, _} = net_kernel:start(NodeOpts#options.node_start_arg),
+    TargetNode = nodename(NodeOpts#options.target_name),
+    erlang:set_cookie(TargetNode, NodeOpts#options.target_cookie),
+
+    %% any commands that don't need a running node
+    case RestArgs of
+        ["chkconfig", File] ->
+            {Result, Msg} = check_config_file(File),
+            io:format("~s~n", [Msg]),
+            halt(case Result of ok -> 0; error -> 1 end);
+        _ ->
+            ok
+    end,
+
+    %% See if the node is currently running  -- if it's not, we'll bail
+    case {net_kernel:hidden_connect_node(TargetNode),
+          net_adm:ping(TargetNode)} of
+        {true, pong} ->
+            ok;
+        {false,pong} ->
+            io:format("Failed to connect to the ControlHub (node ~p).\n", [TargetNode]),
+            halt(1);
+        {_, pang} ->
+            io:format("The ControlHub is down.\n", []),
+            halt(1)
+    end,
+
+    case RestArgs of
+        ["getpid"] ->
+            io:format("~p\n",
+                      [list_to_integer(safe_rpc(TargetNode, os, getpid, []))]);
+        ["ping"] ->
+            %% If we got this far, the node already responsed to a
+            %% ping, so just dump a "pong"
+            io:format("pong\n");
+        ["status"] ->
+            Pid = list_to_integer(safe_rpc(TargetNode, os, getpid, [])),
+            {controlhub, _Desc, Vsn} = lists:keyfind(controlhub, 1, safe_rpc(TargetNode, application, which_applications, [])),
+            io:format("The ControlHub is up (version ~s, pid=~w)~n", [Vsn, Pid]);
+        ["info"] ->
+            io:format("The ControlHub is running. General info ...~n"),
+            InfoList = safe_rpc(TargetNode, ch_stats, get_app_info, []),
+            StartTimestamp = proplists:get_value(controlhub_start_timestamp, InfoList),
+            {{StartYr, StartMonth, StartDay}, {StartHr, StartMin, StartSec}} = calendar:now_to_universal_time(StartTimestamp),
+            StartTimeString = io_lib:format("~B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B UTC", 
+                                            [StartYr, StartMonth, StartDay, StartHr, StartMin, StartSec]),
+            UptimeInSeconds = timer:now_diff(os:timestamp(), StartTimestamp) div 1000000, 
+            UptimeString = io_lib:format("~w days, ~w hours, ~w minutes, ~w seconds", 
+                                         [UptimeInSeconds div (24 * 3600), (UptimeInSeconds div 3600) rem 24, (UptimeInSeconds div 60) rem 60, UptimeInSeconds rem 60]),
+            io:format("    started at ~s~n"
+                      "    uptime:    ~s~n"
+                      "    version:   ~s~n"
+                      "    config file: ~s~n~n",
+                      [StartTimeString, 
+                       UptimeString, 
+                       proplists:get_value(controlhub_vsn, InfoList, "unknown"),
+                       proplists:get_value(config_file, InfoList)]),
+            io:format("Device client parameters ...~n"
+                      "    max packets in flight to each board = ~w~n"
+                      "    timeout for replies from board = ~wms~n"
+                      "    device client lifetime when inactive = ~wms~n",
+                      [proplists:get_value(max_udp_in_flight, InfoList, unknown),
+                       proplists:get_value(device_response_timeout, InfoList, unknown),
+                       proplists:get_value(device_client_shutdown_after, InfoList, unknown)]),
+            case proplists:get_value(device_allowlist_file, InfoList, unknown) of
+                none ->
+                    io:format("    no allowlist defined~n~n");
+                FilePath ->
+                    io:format("    allowlist file \"~s\" (mode: ~w)~n~n", [FilePath, proplists:get_value(device_allowlist_mode, InfoList, unknown)])
+            end,
+            io:format("TCP parameters ...~n"
+                      "    Listening on port ~w~n",
+                      [proplists:get_value(tcp_listen_port, InfoList, unknown)]);
+        ["stats"] ->
+            io:format("~s\n", [safe_rpc(TargetNode, ch_stats, report_to_string, [])]);
+        ["stop"] ->
+            io:format("~p\n", [safe_rpc(TargetNode, init, stop, [])]);
+        ["restart"] ->
+            io:format("~p\n", [safe_rpc(TargetNode, init, restart, [])]);
+        ["reboot"] ->
+            io:format("~p\n", [safe_rpc(TargetNode, init, reboot, [])]);
+        ["rpc", Module, Function | RpcArgs] ->
+            case rpc:call(TargetNode,
+                          list_to_atom(Module),
+                          list_to_atom(Function),
+                          [RpcArgs], 60000) of
+                ok ->
+                    ok;
+                {badrpc, Reason} ->
+                    io:format("RPC to ~p failed: ~p\n", [TargetNode, Reason]),
+                    halt(1);
+                _ ->
+                    halt(1)
+            end;
+        ["rpc_infinity", Module, Function | RpcArgs] ->
+            case rpc:call(TargetNode,
+                          list_to_atom(Module),
+                          list_to_atom(Function),
+                          [RpcArgs], infinity) of
+                ok ->
+                    ok;
+                {badrpc, Reason} ->
+                    io:format("RPC to ~p failed: ~p\n", [TargetNode, Reason]),
+                    halt(1);
+                _ ->
+                    halt(1)
+            end;
+        ["rpcterms", Module, Function, ArgsAsString] ->
+            case rpc:call(TargetNode,
+                          list_to_atom(Module),
+                          list_to_atom(Function),
+                          consult(ArgsAsString), 60000) of
+                {badrpc, Reason} ->
+                    io:format("RPC to ~p failed: ~p\n", [TargetNode, Reason]),
+                    halt(1);
+                Other ->
+                    io:format("~p\n", [Other])
+            end;
+        Other ->
+            io:format("Other: ~p\n", [Other]),
+            io:format("Usage: nodetool {chkconfig|getpid|ping|status|info|stats|stop|restart|reboot|rpc|rpc_infinity|rpcterms}\n")
+    end,
+    net_kernel:stop().
+
+
+process_args([], Acc, NodeOpts) ->
+    check_arg_defined(NodeOpts, target_name),
+    check_arg_defined(NodeOpts, target_cookie),
+    check_arg_defined(NodeOpts, node_start_arg),
+    {lists:reverse(Acc), NodeOpts};
+process_args(["-setcookie", Cookie | Rest], Acc, Options) ->
+    process_args(Rest, Acc, Options#options{target_cookie=list_to_atom(Cookie)});
+process_args(["-name", TargetName | Rest], Acc, Options) ->
+    ThisNode = append_node_suffix(TargetName, "_maint_"),
+    process_args(Rest, Acc, Options#options{node_start_arg=[ThisNode,longnames], target_name=TargetName});
+process_args(["-sname", TargetName | Rest], Acc, Options) ->
+    ThisNode = append_node_suffix(TargetName, "_maint_"),
+    process_args(Rest, Acc, Options#options{node_start_arg=[ThisNode,shortnames], target_name=TargetName});
+process_args([Arg | Rest], Acc, Opts) ->
+    process_args(Rest, [Arg | Acc], Opts).
+
+
+check_arg_defined(NodeOpts, node_start_arg) ->
+    case NodeOpts#options.node_start_arg of
+        undefined ->
+            io:format("ERROR: Target node name undefined. Please add the -sname or -name argument~n"),
+            halt(99);
+        _ ->
+            ok
+    end;
+check_arg_defined(NodeOpts, target_name) ->
+    case NodeOpts#options.target_name of
+        undefined ->
+            io:format("ERROR: Target node name undefined. Please add the -sname or -name argument~n"),
+            halt(99);
+        _ ->
+            ok
+    end;
+check_arg_defined(NodeOpts, target_cookie) ->
+    case NodeOpts#options.target_cookie of
+        undefined ->
+            io:format("ERROR: cookie undefined. Please add the -setcookie argument~n"),
+            halt(99);
+        _ ->
+            ok
+    end.
+
+start_epmd() ->
+    [] = os:cmd(epmd_path() ++ " -daemon"),
+    ok.
+
+epmd_path() ->
+    ErtsBinDir = filename:dirname(escript:script_name()),
+    Name = "epmd",
+    case os:find_executable(Name, ErtsBinDir) of
+        false ->
+            case os:find_executable(Name) of
+                false ->
+                    io:format("Could not find epmd.~n"),
+                    halt(1);
+                GlobalEpmd ->
+                    GlobalEpmd
+            end;
+        Epmd ->
+            Epmd
+    end.
+
+
+nodename(Name) ->
+    case string:tokens(Name, "@") of
+        [_Node, _Host] ->
+            list_to_atom(Name);
+        [Node] ->
+            [_, Host] = string:tokens(atom_to_list(node()), "@"),
+            list_to_atom(lists:concat([Node, "@", Host]))
+    end.
+
+append_node_suffix(Name, Suffix) ->
+    case string:tokens(Name, "@") of
+        [Node, Host] ->
+            list_to_atom(lists:concat([Node, Suffix, os:getpid(), "@", Host]));
+        [Node] ->
+            list_to_atom(lists:concat([Node, Suffix, os:getpid()]))
+    end.
+
+
+
+%%
+%% Runs file:consult on specified file, performs basic checks on whether file obeys config file syntax,
+%%   and runs same function on any other config files that are referenced
+%% Returns {ok, Msg} if file conforms to config file syntax, otherwise returns {error, Msg}
+%%
+check_config_file(File) ->
+    case file:consult(File) of
+        {ok, Terms} ->
+            case Terms of
+                [ConfigFileItems] when is_list(ConfigFileItems) ->
+                    % 1) Check if defined any parameters that don't exist
+                    DefinedParams = lists:flatten(
+                                        lists:filtermap(
+                                            fun(X) -> case X of
+                                                {controlhub, L} when is_list(L) -> {true, proplists:get_keys(L)};
+                                                _ -> false end
+                                            end,
+                                            ConfigFileItems
+                                        )),
+                    ValidParamList = ch_config:get_parameter_names(),
+                    ValidParamSet  = sets:from_list(ValidParamList),
+                    InvalidParams = sets:to_list(sets:subtract(sets:from_list(DefinedParams), ValidParamSet)),
+                    io:format("Constructing msg~n"),
+                    Result = case length(InvalidParams) of
+                              0 ->
+                                  {ok, io_lib:format("~s ... ok.~n", [File])};
+                              _ ->
+                                  {error, io_lib:format("~s ... ERROR : The following ControlHub parameters are not used (maybe typo?): ~p~n   Valid parameters: ~p~n", [File, InvalidParams, ValidParamList])}
+                          end,
+                    % 2) Check referenced files
+                    ReferencedFiles = lists:filter(fun io_lib:char_list/1 , ConfigFileItems),
+                    ReferencedFileResults = lists:map(fun(X) -> check_config_file(X) end, ReferencedFiles),
+                    lists:foldl(fun({Status, M}, {AccStatus, AccMsg}) ->
+                                    {case {Status, AccStatus} of {ok, ok} -> ok; _ -> error end, AccMsg ++ M}
+                                end,
+                                Result,
+                                ReferencedFileResults);
+                _ ->
+                    {error, io_lib:format("~s ... ERROR : Config file must contain a single Erlang term, that is a list.~n", [File])}
+            end;
+        {error, {Line, Mod, Term}} ->
+            Msg = io_lib:format("~s ... ERROR on line ~s~n", [File, file:format_error({Line, Mod, Term})]),
+            {error, Msg};
+        {error, R} ->
+            Msg = io_lib:format("~s ... ERROR when reading / parsing : ~s~n", [File, file:format_error(R)]),
+            {error, Msg}
+    end.
+
+
+%%
+%% Given a string or binary, parse it into a list of terms, ala file:consult/0
+%%
+consult(Str) when is_list(Str) ->
+    consult([], Str, []);
+consult(Bin) when is_binary(Bin)->
+    consult([], binary_to_list(Bin), []).
+
+consult(Cont, Str, Acc) ->
+    case erl_scan:tokens(Cont, Str, 0) of
+        {done, Result, Remaining} ->
+            case Result of
+                {ok, Tokens, _} ->
+                    {ok, Term} = erl_parse:parse_term(Tokens),
+                    consult([], Remaining, [Term | Acc]);
+                {eof, _Other} ->
+                    lists:reverse(Acc);
+                {error, Info, _} ->
+                    {error, Info}
+            end;
+        {more, Cont1} ->
+            consult(Cont1, eof, Acc)
+    end.
+
+
+%%
+%% Run remote procedural call, and halt with exit code 2 if RPC fails for any reason 
+%%
+-spec safe_rpc(TargetNode :: atom(), Module :: atom(), Func :: atom(), Args :: list()) -> Result :: any() | no_return().
+safe_rpc(TargetNode, Module, Func, Args) ->
+    case rpc:call(TargetNode, Module, Func, Args, 60000) of
+        {badrpc, Reason} ->
+            io:format("ERROR: Remote procedural call failed with reason: ~w~n"
+                      "        Node = ~w , Function = ~w:~w , Args = ~w",
+                      [Reason, TargetNode, Module, Func, Args]),
+            halt(2);
+         Other ->
+            Other
+    end.

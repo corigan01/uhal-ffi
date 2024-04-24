@@ -1,0 +1,51 @@
+# Sanitize build home
+BUILD_HOME := $(shell cd ${BUILD_HOME}; pwd)
+
+CACTUS_ROOT ?= /opt/cactus
+CACTUS_RPM_ROOT ?= $(BUILD_HOME)
+
+
+SHELL := /bin/bash
+PYTHON ?= python
+CACTUS_PLATFORM=$(shell if [ -f /etc/system-release ]; then cat /etc/system-release; fi)
+CACTUS_OS=unknown.os
+
+UNAME=$(strip $(shell uname -s))
+ifeq ($(UNAME),Linux)
+    CACTUS_OS_EL_MAJOR=$(shell cat /etc/system-release | sed 's/^\(CentOS Linux\|CentOS Stream\|AlmaLinux\|Rocky Linux\) release \([0-9]\).*/\2/;t;d')
+    ifneq ($(CACTUS_OS_EL_MAJOR),)
+        CACTUS_OS=el$(CACTUS_OS_EL_MAJOR)
+    endif
+else ifeq ($(UNAME),Darwin)
+    CACTUS_OS=osx
+endif
+
+$(info OS Detected: $(CACTUS_OS))
+
+# Set which externals are built by default for each OS
+ifeq ($(CACTUS_OS), slc6)
+    BUILD_ERLANG?=1
+    BUILD_BOOST?=1
+    BUILD_PUGIXML?=1
+endif
+
+
+#extern/erlang
+ifeq ($(BUILD_ERLANG), 1)
+    EXTERN_ERLANG_PREFIX = $(CACTUS_RPM_ROOT)/extern/erlang/RPMBUILD/SOURCES
+    EXTERN_ERLANG_BIN_PREFIX = ${EXTERN_ERLANG_PREFIX}/bin
+endif
+
+#extern/boost
+ifeq ($(BUILD_BOOST), 1)
+    EXTERN_BOOST_PREFIX = $(CACTUS_RPM_ROOT)/extern/boost/RPMBUILD/SOURCES
+    EXTERN_BOOST_INCLUDE_PREFIX = ${EXTERN_BOOST_PREFIX}/include
+    EXTERN_BOOST_LIB_PREFIX = ${EXTERN_BOOST_PREFIX}/lib
+endif
+
+#extern/pugixml
+ifeq ($(BUILD_PUGIXML), 1)
+    EXTERN_PUGIXML_PREFIX = $(CACTUS_RPM_ROOT)/extern/pugixml/RPMBUILD/SOURCES
+    EXTERN_PUGIXML_INCLUDE_PREFIX = ${EXTERN_PUGIXML_PREFIX}/include
+    EXTERN_PUGIXML_LIB_PREFIX = ${EXTERN_PUGIXML_PREFIX}/lib
+endif

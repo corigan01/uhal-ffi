@@ -1,0 +1,17 @@
+*/RPMBUILD/
+*/bin/
+*/lib/
+*/obj/
+*/rpm/
+
+gui/MANIFEST
+gui/build/
+gui/dist/
+
+log/generator.exe
+
+python/MANIFEST
+python/build/
+python/dist/
+python/pkg/uhal/__init__.pyc
+python/pkg/uhal/_core.so
