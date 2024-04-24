@@ -1,4 +1,4 @@
-use std::env;
+// use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -7,42 +7,50 @@ fn main() {
         .canonicalize()
         .expect("Could not get path to uhal");
 
-    let header_dir = uhal_lib_dir.join("include");
-    let header_path = header_dir.join("uhal").join("uhal.hpp");
-    let lib_path = uhal_lib_dir.join("lib");
+    println!(
+        "cargo::rustc-link-search={}",
+        uhal_lib_dir.join("lib").to_str().unwrap()
+    );
+    println!(
+        "cargo::rustc-link-search={}",
+        uhal_lib_dir.join("../log/lib").to_str().unwrap()
+    );
+    println!(
+        "cargo::rustc-link-search={}",
+        uhal_lib_dir.join("../grammars/lib").to_str().unwrap()
+    );
 
-    println!("cargo:rustc-link-search={}", lib_path.to_str().unwrap());
-    println!("cargo:rustc-link-lib=cactus_uhal_uhal");
+    println!("cargo:rustc-link-lib=static=cactus_uhal_uhal");
+    println!("cargo:rustc-link-lib=static=cactus_uhal_grammars");
+    println!("cargo:rustc-link-lib=static=cactus_uhal_log");
 
-    if !Command::new("make")
-        .current_dir(uhal_lib_dir.to_str().unwrap())
+    println!("cargo:rustc-link-lib=rt");
+    println!("cargo:rustc-link-lib=pugixml");
+
+    println!("cargo:rustc-link-lib=boost_filesystem");
+    println!("cargo:rustc-link-lib=boost_regex");
+    println!("cargo:rustc-link-lib=boost_system");
+    println!("cargo:rustc-link-lib=boost_chrono");
+
+    println!("cargo:rerun-if-changed=src/ffi.rs");
+
+    Command::new("make")
+        .current_dir(uhal_lib_dir.join("../").to_str().unwrap())
+        .env("BUILD_STATIC", "1")
         .arg("all")
         .arg(format!("-j{}", num_cpus::get()))
         .output()
-        .expect("Could not spawn 'make' to build uhal.")
-        .status
-        .success()
-    {
-        panic!("Could not build 'uhal'");
-    }
+        .expect("Could not spawn 'make' to build uhal");
 
-    let bindings = bindgen::Builder::default()
-        .header(header_path.to_str().unwrap())
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .clang_arg(format!("-I{}", header_dir.to_str().unwrap()))
-        .clang_arg(format!(
-            "-I{}",
-            uhal_lib_dir.join("../log/include").to_str().unwrap()
-        ))
-        .clang_arg(format!(
-            "-I{}",
-            uhal_lib_dir.join("../grammars/include").to_str().unwrap()
-        ))
-        .generate()
-        .expect("Unable to generate bindings to uhal");
-
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("bindings.rs");
-    bindings
-        .write_to_file(out_path)
-        .expect("Unable to write bindings");
+    autocxx_build::Builder::new(
+        "src/ffi.rs",
+        &[
+            "ipbus-software/uhal/log/include",
+            "ipbus-software/uhal/grammars/include",
+            "ipbus-software/uhal/uhal/include",
+        ],
+    )
+    .build()
+    .unwrap()
+    .compile("uhalbind");
 }
