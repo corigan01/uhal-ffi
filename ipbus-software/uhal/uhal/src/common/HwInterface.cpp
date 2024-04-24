@@ -133,7 +133,7 @@ namespace uhal
   }
 
 
-  const Node& HwInterface::getNode ( const std::string& aId ) const
+  const Node& HwInterface::getNode ( const std::string &aId ) const
   {
     return mNode->getNode ( aId );
   }

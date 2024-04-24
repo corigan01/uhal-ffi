@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-fn main() {
+fn main() -> miette::Result<()> {
     let uhal_lib_dir = PathBuf::from("./ipbus-software/uhal/uhal/")
         .canonicalize()
         .expect("Could not get path to uhal");
@@ -40,7 +40,7 @@ fn main() {
         .arg("all")
         .arg(format!("-j{}", num_cpus::get()))
         .output()
-        .expect("Could not spawn 'make' to build uhal");
+        .expect("Unable to invoke 'make'");
 
     autocxx_build::Builder::new(
         "src/ffi.rs",
@@ -50,7 +50,8 @@ fn main() {
             "ipbus-software/uhal/uhal/include",
         ],
     )
-    .build()
-    .unwrap()
+    .build()?
     .compile("uhalbind");
+
+    Ok(())
 }

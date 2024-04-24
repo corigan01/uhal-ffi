@@ -3,6 +3,8 @@ pub mod ffi;
 
 #[cfg(test)]
 mod test {
+    use crate::ffi::rawbind;
+
     use super::ffi::ConnectionManager;
     use autocxx::WithinUniquePtr;
     use cxx::let_cxx_string;
@@ -14,8 +16,17 @@ mod test {
         );
         let_cxx_string!(devicename = "dummy.udp");
 
-        let connection = ConnectionManager::new1(&filename).within_unique_ptr();
+        let mut connection = ConnectionManager::new1(&filename).within_unique_ptr();
+        let mut hw = connection
+            .pin_mut()
+            .getDevice(&devicename)
+            .within_unique_ptr();
+        let hw = hw.pin_mut();
 
-        panic!("{:#?}", connection.getDevices1(&devicename));
+        let_cxx_string!(node_test = "REG");
+        let node = hw.get_node(&node_test);
+        let value = node.read();
+
+        hw.dispatch();
     }
 }
