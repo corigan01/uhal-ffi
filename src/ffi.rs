@@ -35,8 +35,13 @@ pub mod resultbind {
         include!("../extra-cpp/result.hpp");
 
         type ConnectionManager = crate::ffi::ConnectionManager;
+        type HwInterface = crate::ffi::HwInterface;
 
         fn new_connection_manager_result(str: &CxxString) -> Result<UniquePtr<ConnectionManager>>;
+        fn get_device_from_connection_manager_result(
+            cm: &mut UniquePtr<ConnectionManager>,
+            string: &CxxString,
+        ) -> Result<UniquePtr<HwInterface>>;
     }
 }
 

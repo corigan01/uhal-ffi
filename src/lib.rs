@@ -38,4 +38,14 @@ mod test {
         )
         .expect("Unable to construct new ConnectionManager");
     }
+
+    #[test]
+    fn test_getting_device() {
+        let mut cm = ConnectionManager::new(
+            "file://ipbus-software/uhal/tests/etc/uhal/tests/dummy_connections.xml",
+        )
+        .expect("Unable to construct new ConnectionManager");
+
+        cm.get_device("dummy.udp").unwrap();
+    }
 }
