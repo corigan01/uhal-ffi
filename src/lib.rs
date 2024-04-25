@@ -3,9 +3,8 @@ pub mod ffi;
 
 #[cfg(test)]
 mod test {
-    use crate::ffi::rawbind;
-
     use super::ffi::ConnectionManager;
+    use crate::ffi;
     use autocxx::WithinUniquePtr;
     use cxx::let_cxx_string;
 
@@ -15,6 +14,7 @@ mod test {
             filename = "file://ipbus-software/uhal/tests/etc/uhal/tests/dummy_connections.xml"
         );
         let_cxx_string!(devicename = "dummy.udp");
+        let_cxx_string!(node_test = "REG");
 
         let mut connection = ConnectionManager::new1(&filename).within_unique_ptr();
         let mut hw = connection
@@ -23,10 +23,11 @@ mod test {
             .within_unique_ptr();
         let hw = hw.pin_mut();
 
-        let_cxx_string!(node_test = "REG");
         let node = hw.get_node(&node_test);
         let value = node.read();
 
         hw.dispatch();
+
+        panic!("Value: {}", ffi::value(&value));
     }
 }

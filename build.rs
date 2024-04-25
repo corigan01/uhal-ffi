@@ -45,6 +45,7 @@ fn main() -> miette::Result<()> {
     autocxx_build::Builder::new(
         "src/ffi.rs",
         &[
+            "extra-cpp",
             "ipbus-software/uhal/log/include",
             "ipbus-software/uhal/grammars/include",
             "ipbus-software/uhal/uhal/include",
