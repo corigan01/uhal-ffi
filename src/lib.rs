@@ -58,4 +58,18 @@ mod test {
 
         cm.get_device("dummy.udp").unwrap();
     }
+
+    #[test]
+    fn test_list_devices() {
+        let mut cm = ConnectionManager::new(
+            "file://ipbus-software/uhal/tests/etc/uhal/tests/dummy_connections.xml",
+        )
+        .expect("Unable to construct new ConnectionManager");
+
+        assert_ne!(
+            cm.list_devices(None).len(),
+            0,
+            "Devices should have been in connection"
+        );
+    }
 }

@@ -31,4 +31,18 @@ impl ConnectionManager {
             ffi_class: hw_interface,
         })
     }
+
+    pub fn list_devices(&mut self, regex: Option<&str>) -> Vec<String> {
+        let device_list = if let Some(regex) = regex {
+            let_cxx_string!(cxx_regex = regex);
+            self.ffi_class.getDevices1(&cxx_regex)
+        } else {
+            self.ffi_class.getDevices()
+        };
+
+        device_list
+            .iter()
+            .map(|cxx_str| String::from(cxx_str.to_str().unwrap_or_default()))
+            .collect()
+    }
 }
