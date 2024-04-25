@@ -5,11 +5,7 @@ pub mod hw;
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
-    use crate::{connection::ConnectionManager, ffi};
-    use autocxx::WithinUniquePtr;
-    use cxx::let_cxx_string;
+    use crate::connection::ConnectionManager;
 
     // #[test]
     // fn test_stuffs() {
@@ -37,7 +33,7 @@ mod test {
 
     #[test]
     fn test_make_dummy_connection_manager() {
-        let cm = ConnectionManager::new(
+        let _cm = ConnectionManager::new(
             "file://ipbus-software/uhal/tests/etc/uhal/tests/dummy_connections.xml",
         )
         .expect("Unable to construct new ConnectionManager");
