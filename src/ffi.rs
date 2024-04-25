@@ -19,13 +19,16 @@ include_cpp! {
 #[cxx::bridge(namespace = "uhal")]
 pub mod rawbind {
     unsafe extern "C++" {
-        include!("uhal/HwInterface.hpp");
+        include!("uhal/uhal.hpp");
 
         type HwInterface = crate::ffi::HwInterface;
         type Node = crate::ffi::Node;
 
         #[rust_name = "get_node"]
-        fn getNode<'a>(self: &'a HwInterface, aId: &CxxString) -> &'a Node;
+        fn getNode<'a>(self: &'a HwInterface, aId: &CxxString) -> Result<&'a Node>;
+
+        #[rust_name = "disable_logging"]
+        fn disableLogging();
     }
 }
 
@@ -36,12 +39,14 @@ pub mod resultbind {
 
         type ConnectionManager = crate::ffi::ConnectionManager;
         type HwInterface = crate::ffi::HwInterface;
+        type Node = crate::ffi::Node;
 
         fn new_connection_manager_result(str: &CxxString) -> Result<UniquePtr<ConnectionManager>>;
         fn get_device_from_connection_manager_result(
             cm: &mut UniquePtr<ConnectionManager>,
             string: &CxxString,
         ) -> Result<UniquePtr<HwInterface>>;
+
     }
 }
 

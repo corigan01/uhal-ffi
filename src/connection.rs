@@ -1,4 +1,7 @@
-use crate::{ffi, hw::HwInterface};
+use crate::{
+    ffi::{self, rawbind},
+    hw::HwInterface,
+};
 use anyhow::Result;
 use cxx::{let_cxx_string, UniquePtr};
 
@@ -8,6 +11,7 @@ pub struct ConnectionManager {
 
 impl ConnectionManager {
     pub fn new(xml_path: &str) -> Result<Self> {
+        rawbind::disable_logging();
         let_cxx_string!(cxx_path = xml_path);
         let connection_manager = crate::ffi::resultbind::new_connection_manager_result(&cxx_path)?;
 

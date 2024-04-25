@@ -2,6 +2,8 @@ pub mod connection;
 #[allow(unused_imports)]
 pub mod ffi;
 pub mod hw;
+pub mod node;
+pub mod valmem;
 
 #[cfg(test)]
 mod test {
@@ -42,7 +44,7 @@ mod test {
     #[test]
     fn test_make_invalid_dunny_connection_manager() {
         assert!(
-            matches!(ConnectionManager::new("file:/invalid_path_to.xml"), Err(_)),
+            matches!(ConnectionManager::new("file://invalid_path_to.xml"), Err(_)),
             "ConnectionManager did not fail"
         );
     }
