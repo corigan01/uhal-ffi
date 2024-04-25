@@ -1,5 +1,6 @@
 use autocxx::include_cpp;
 use cxx::CxxString;
+use cxx::UniquePtr;
 
 include_cpp! {
     #include "uhal/uhal.hpp"
@@ -25,6 +26,17 @@ pub mod rawbind {
 
         #[rust_name = "get_node"]
         fn getNode<'a>(self: &'a HwInterface, aId: &CxxString) -> &'a Node;
+    }
+}
+
+#[cxx::bridge(namespace = "uhal")]
+pub mod resultbind {
+    unsafe extern "C++" {
+        include!("../extra-cpp/result.hpp");
+
+        type ConnectionManager = crate::ffi::ConnectionManager;
+
+        fn new_connection_manager_result(str: &CxxString) -> Result<UniquePtr<ConnectionManager>>;
     }
 }
 
