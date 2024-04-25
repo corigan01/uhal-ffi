@@ -40,6 +40,14 @@ mod test {
     }
 
     #[test]
+    fn test_make_invalid_dunny_connection_manager() {
+        assert!(
+            matches!(ConnectionManager::new("file:/invalid_path_to.xml"), Err(_)),
+            "ConnectionManager did not fail"
+        );
+    }
+
+    #[test]
     fn test_getting_device() {
         let mut cm = ConnectionManager::new(
             "file://ipbus-software/uhal/tests/etc/uhal/tests/dummy_connections.xml",
