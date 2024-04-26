@@ -12,6 +12,7 @@ include_cpp! {
     generate!("uhal::ConnectionManager")
     generate!("uhal::HwInterface")
     generate!("uhal::ValHeader")
+    generate!("uhal::defs::NodePermission")
     generate!("ready")
     generate!("value")
 }
@@ -51,6 +52,7 @@ pub mod resultbind {
 }
 
 pub use autoffi::ready;
+pub use autoffi::uhal::defs::NodePermission;
 pub use autoffi::uhal::ConnectionManager;
 pub use autoffi::uhal::HwInterface;
 pub use autoffi::uhal::Node;
