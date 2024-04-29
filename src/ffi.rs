@@ -8,6 +8,8 @@ include_cpp! {
     name!(autoffi)
     safety!(unsafe)
     concrete!("uhal::ValWord<uint32_t>", ValWord32)
+    concrete!("uhal::ValVector<uint32_t>", ValVector32)
+    concrete!("std::vector<uint32_t>", Vector32)
     generate!("uhal::Node")
     generate!("uhal::ConnectionManager")
     generate!("uhal::HwInterface")
@@ -15,6 +17,8 @@ include_cpp! {
     generate!("uhal::defs::NodePermission")
     generate!("ready")
     generate!("value")
+    generate!("ready_valvec")
+    generate!("value_valvec")
 }
 
 #[cxx::bridge(namespace = "uhal")]
@@ -52,10 +56,13 @@ pub mod resultbind {
 }
 
 pub use autoffi::ready;
+pub use autoffi::ready_valvec;
 pub use autoffi::uhal::defs::NodePermission;
 pub use autoffi::uhal::ConnectionManager;
 pub use autoffi::uhal::HwInterface;
 pub use autoffi::uhal::Node;
 pub use autoffi::uhal::ValHeader;
 pub use autoffi::value;
+pub use autoffi::value_valvec;
+pub use autoffi::ValVector32;
 pub use autoffi::ValWord32;
