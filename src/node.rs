@@ -36,4 +36,29 @@ impl<'a> Node<'a> {
         let _ = self.ffi_class.write(&value);
         Ok(())
     }
+
+    // FIXME: Since bindings are hard, these do not return ValVectors like
+    //        they should. Instead these do all the work of sending values
+    //        or reading values into a vector.
+
+    pub fn read_block_dispatch(&mut self, size: usize) -> Result<Vec<u32>> {
+        Ok(
+            unsafe { ffi::resultbind::read_block_from_node(self.ffi_class, size as u32) }?
+                .pin_mut()
+                .into_iter()
+                .map(|item| *item)
+                .collect(),
+        )
+    }
+
+    pub fn write_block_dispatch(&mut self, slice: &[u32]) -> Result<()> {
+        unsafe {
+            ffi::resultbind::write_block_from_node(
+                self.ffi_class,
+                slice.as_ptr(),
+                slice.len() as u32,
+            )?
+        }
+        Ok(())
+    }
 }

@@ -1,5 +1,6 @@
 use autocxx::include_cpp;
 use cxx::CxxString;
+use cxx::CxxVector;
 use cxx::UniquePtr;
 
 include_cpp! {
@@ -39,6 +40,7 @@ pub mod rawbind {
 
 #[cxx::bridge(namespace = "uhal")]
 pub mod resultbind {
+
     unsafe extern "C++" {
         include!("../extra-cpp/result.hpp");
 
@@ -52,6 +54,9 @@ pub mod resultbind {
             string: &CxxString,
         ) -> Result<UniquePtr<HwInterface>>;
 
+        unsafe fn read_block_from_node(node: &Node, size: u32)
+            -> Result<UniquePtr<CxxVector<u32>>>;
+        unsafe fn write_block_from_node(node: &Node, ptr: *const u32, len: u32) -> Result<()>;
     }
 }
 
