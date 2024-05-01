@@ -64,4 +64,20 @@ mod test {
             "No dispatch, so value should be Err()"
         );
     }
+
+    #[test]
+    fn test_bulk_transfer_fail_for_single_register() {
+        let mut cm = ConnectionManager::new(
+            "file://ipbus-software/uhal/tests/etc/uhal/tests/dummy_connections.xml",
+        )
+        .expect("Unable to construct new ConnectionManager");
+
+        let mut hw = cm.get_device("dummy.udp").unwrap();
+        let value = hw.get_node("REG").unwrap().read_block_dispatch(16);
+
+        assert!(
+            matches!(value, Err(_)),
+            "No dispatch, so value should be Err()"
+        );
+    }
 }

@@ -52,6 +52,7 @@ fn main() -> miette::Result<()> {
         ],
     )
     .build()?
+    .std("c++14")
     .compile("uhalbind");
 
     Ok(())

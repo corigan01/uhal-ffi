@@ -60,14 +60,14 @@ pub mod resultbind {
     }
 }
 
-pub use autoffi::ready;
-pub use autoffi::ready_valvec;
-pub use autoffi::uhal::defs::NodePermission;
-pub use autoffi::uhal::ConnectionManager;
-pub use autoffi::uhal::HwInterface;
-pub use autoffi::uhal::Node;
-pub use autoffi::uhal::ValHeader;
-pub use autoffi::value;
-pub use autoffi::value_valvec;
-pub use autoffi::ValVector32;
-pub use autoffi::ValWord32;
+pub(crate) use autoffi::ready;
+pub(crate) use autoffi::ready_valvec;
+pub(crate) use autoffi::uhal::defs::NodePermission;
+pub(crate) use autoffi::uhal::ConnectionManager;
+pub(crate) use autoffi::uhal::HwInterface;
+pub(crate) use autoffi::uhal::Node;
+pub(crate) use autoffi::uhal::ValHeader;
+pub(crate) use autoffi::value;
+pub(crate) use autoffi::value_valvec;
+pub(crate) use autoffi::ValVector32;
+pub(crate) use autoffi::ValWord32;
