@@ -55,6 +55,7 @@ pub mod resultbind {
         ) -> Result<UniquePtr<HwInterface>>;
 
         fn get_node_from_node<'a>(node: &'a Node, string: &CxxString) -> Result<&'a Node>;
+        fn dispatch_from_node(node: &Node);
 
         unsafe fn read_block_from_node(node: &Node, size: u32)
             -> Result<UniquePtr<CxxVector<u32>>>;

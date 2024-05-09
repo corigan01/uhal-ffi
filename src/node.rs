@@ -63,10 +63,14 @@ impl<'a> Node<'a> {
         Ok(())
     }
 
-    pub fn get_node(&mut self, node: &str) -> Result<Node<'a>> {
+    pub fn get_node(&self, node: &str) -> Result<Node<'a>> {
         let_cxx_string!(cxx_string = node);
 
         let node = ffi::resultbind::get_node_from_node(&self.ffi_class, &cxx_string)?;
         Ok(Node::<'a> { ffi_class: node })
+    }
+
+    pub fn dispatch(&self) {
+        ffi::resultbind::dispatch_from_node(&self.ffi_class);
     }
 }

@@ -23,6 +23,9 @@ namespace uhal {
     return node.getNode(string);
   }
 
+  inline void dispatch_from_node(const Node& node) {
+    node.getClient().dispatch();
+  }
   
   inline std::unique_ptr<std::vector<uint32_t>> read_block_from_node(const uhal::Node& node, uint32_t size) {
     uhal::ValVector<uint32_t> valvec = node.readBlock(size);
