@@ -19,6 +19,10 @@ namespace uhal {
     return std::make_unique<uhal::HwInterface>(cm->getDevice(string));
   }
 
+  inline const uhal::Node& get_node_from_node(const Node& node, const std::string& string) {
+    return node.getNode(string);
+  }
+
   
   inline std::unique_ptr<std::vector<uint32_t>> read_block_from_node(const uhal::Node& node, uint32_t size) {
     uhal::ValVector<uint32_t> valvec = node.readBlock(size);

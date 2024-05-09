@@ -3,6 +3,7 @@ use crate::{
     valmem::ValWord32,
 };
 use anyhow::{anyhow, Result};
+use cxx::let_cxx_string;
 
 pub struct Node<'a> {
     pub(crate) ffi_class: &'a ffi::Node,
@@ -60,5 +61,12 @@ impl<'a> Node<'a> {
             )?
         }
         Ok(())
+    }
+
+    pub fn get_node(&mut self, node: &str) -> Result<Node<'a>> {
+        let_cxx_string!(cxx_string = node);
+
+        let node = ffi::resultbind::get_node_from_node(&self.ffi_class, &cxx_string)?;
+        Ok(Node::<'a> { ffi_class: node })
     }
 }
