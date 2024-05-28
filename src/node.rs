@@ -3,6 +3,7 @@ use crate::{
     valmem::ValWord32,
 };
 use anyhow::{anyhow, Result};
+use autocxx::WithinUniquePtr;
 use cxx::let_cxx_string;
 
 pub struct Node<'a> {
@@ -34,7 +35,7 @@ impl<'a> Node<'a> {
             return Err(anyhow!("Not Writeable"));
         }
 
-        let _ = self.ffi_class.write(&value);
+        self.ffi_class.write(&value).within_unique_ptr();
         Ok(())
     }
 
